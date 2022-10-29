@@ -274,7 +274,7 @@
             // Todo: write recording buffer to file (if user opts in)
             if (self.recognitionRequest != nil) {
                 [self.recognitionRequest appendAudioPCMBuffer:buffer];
-                if(audioFile != nill){
+                if(audioFile != nil){
                     [audioFile writeFromBuffer:buffer error:nil];
                 }
             }
