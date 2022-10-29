@@ -122,6 +122,16 @@
     self.audioSession = nil;
 }
 
+-(NSURL *)applicationDocumentsDirectory {
+    NSString *documentsDirectory;
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    if ([paths count] > 0) {
+        documentsDirectory = [paths objectAtIndex:0];
+    }
+    // Important that we use fileURLWithPath and not URLWithString (see NSURL class reference, Apple Developer Site)
+    return [NSURL fileURLWithPath:documentsDirectory];
+}
+
 - (void) setupAndStartRecognizing:(NSString*)localeStr {
     self.audioSession = [AVAudioSession sharedInstance];
     self.priorAudioCategory = [self.audioSession category];
@@ -171,7 +181,8 @@
         return;
     }
     
-    [self sendEventWithName:@"onSpeechStart" body:nil];
+    NSURL *audioUri=[[self applicationDocumentsDirectory] URLByAppendingPathComponent:@"recognition.wav"];
+    [self sendEventWithName:@"onSpeechStart" body:@{@"audioUri":[audioUri absoluteString]}];
     
     
     // A recognition task represents a speech recognition session.
@@ -220,6 +231,14 @@
     AVAudioMixerNode *mixer = [[AVAudioMixerNode alloc] init];
     [self.audioEngine attachNode:mixer];
     
+    AVAudioFile *audioFile = nil;
+    if(audioUri!=nil){
+        NSError* recordError = nil;
+        audioFile=[[AVAudioFile alloc] initForWriting:audioUri settings:recordingFormat.settings error:&recordError];
+        if (recordError != nil) {
+            [self sendResult:@{@"code": @"record_error", @"message": [recordError localizedDescription], @"domain": [recordError domain]} :nil :nil :nil];
+        }
+    }
     // Start recording and append recording buffer to speech recognizer
     @try {
         [mixer installTapOnBus:0 bufferSize:1024 format:recordingFormat block:^(AVAudioPCMBuffer * _Nonnull buffer, AVAudioTime * _Nonnull when) {
@@ -253,6 +272,9 @@
             // Todo: write recording buffer to file (if user opts in)
             if (self.recognitionRequest != nil) {
                 [self.recognitionRequest appendAudioPCMBuffer:buffer];
+                if(audioFile != nil) {
+                    [audioFile writeFromBuffer:buffer error:nil];
+                }
             }
         }];
     } @catch (NSException *exception) {
