@@ -122,17 +122,7 @@
     self.audioSession = nil;
 }
 
--(NSURL *)applicationDocumentsDirectory {
-    NSString *documentsDirectory;
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    if ([paths count] > 0) {
-        documentsDirectory = [paths objectAtIndex:0];
-    }
-    // Important that we use fileURLWithPath and not URLWithString (see NSURL class reference, Apple Developer Site)
-    return [NSURL fileURLWithPath:documentsDirectory];
-}
-
-- (void) setupAndStartRecognizing:(NSString*)localeStr {
+- (void) setupAndStartRecognizing:(NSString*)localeStr :(NSDictionary *)options {
     self.audioSession = [AVAudioSession sharedInstance];
     self.priorAudioCategory = [self.audioSession category];
     // Tear down resources before starting speech recognition..
@@ -181,10 +171,7 @@
         return;
     }
     
-    NSURL *audioUri=[[self applicationDocumentsDirectory] URLByAppendingPathComponent:@"recognition.wav"];
-    [self sendEventWithName:@"onSpeechStart" body:@{@"audioUri":[audioUri absoluteString]}];
-    
-    
+    [self sendEventWithName:@"onSpeechStart" body:nil];
     
     // A recognition task represents a speech recognition session.
     // We keep a reference to the task so that it can be cancelled.
@@ -233,11 +220,11 @@
     [self.audioEngine attachNode:mixer];
     
     AVAudioFile *audioFile = nil;
-    if(audioUri!=nil){
+    if(options[@"audioUri"]){
         NSError* recordError = nil;
-        audioFile=[[AVAudioFile alloc] initForWriting:audioUri settings:recordingFormat.settings error:&recordError];
+        audioFile=[[AVAudioFile alloc] initForWriting:[NSURL fileURLWithPath:options[@"audioUri"]] settings:recordingFormat.settings error:&recordError];
         if (recordError != nil) {
-            [self sendResult:@{@"code": @"record_error", @"message": [recordError localizedDescription], @"domain": [recordError domain]} :nil :nil :nil];
+            [self sendResult:@{@"code": @"record_error", @"message": [recordError localizedDescription], @"domain": [recordError domain], @"audioUri":options[@"audioUri"]} :nil :nil :nil];
         }
     }
 
@@ -392,7 +379,7 @@ RCT_EXPORT_METHOD(isRecognizing:(RCTResponseSenderBlock)callback) {
     }
 }
 
-RCT_EXPORT_METHOD(startSpeech:(NSString*)localeStr callback:(RCTResponseSenderBlock)callback) {
+RCT_EXPORT_METHOD(startSpeech:(NSString*)localeStr options:(NSDictionary *)options callback:(RCTResponseSenderBlock)callback) {
     if (self.recognitionTask != nil) {
         [self sendResult:RCTMakeError(@"Speech recognition already started!", nil, nil) :nil :nil :nil];
         return;
@@ -410,7 +397,7 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)localeStr callback:(RCTResponseSenderBl
                 [self sendResult:RCTMakeError(@"Speech recognition restricted on this device", nil, nil) :nil :nil :nil];
                 break;
             case SFSpeechRecognizerAuthorizationStatusAuthorized:
-                [self setupAndStartRecognizing:localeStr];
+                [self setupAndStartRecognizing:localeStr :options];
                 break;
         }
     }];
